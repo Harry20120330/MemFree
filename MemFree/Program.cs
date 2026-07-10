@@ -3,7 +3,7 @@ using System;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 
-namespace MemCls
+namespace MemFree
 {
     internal class Program
     {
@@ -109,20 +109,20 @@ namespace MemCls
             // Set OS-specific console title
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
-                Console.Title = "Windows Memory Cleaner (MemCls)";
+                Console.Title = "Windows Memory Cleaner (MemFree)";
             }
             else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
             {
-                Console.Title = "Linux Memory Cleaner (MemCls)";
+                Console.Title = "Linux Memory Cleaner (MemFree)";
             }
             else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
             {
-                Console.Title = "macOS Memory Cleaner (MemCls)";
+                Console.Title = "macOS Memory Cleaner (MemFree)";
             }
 
             string border = new string('=', 50);
             Console.WriteLine(Gradient(border, ColorStart, ColorEnd));
-            Console.WriteLine(Gradient("                Memory Cleaner (MemCls)          ", ColorStart, ColorEnd));
+            Console.WriteLine(Gradient("                Memory Cleaner (MemFree)          ", ColorStart, ColorEnd));
             Console.WriteLine(Gradient(border, ColorStart, ColorEnd));
 
             IMemoryCleaner cleaner;
@@ -175,7 +175,7 @@ namespace MemCls
             {
                 Console.WriteLine(Rgb(Green.r, Green.g, Green.b, "[+] Running with Administrator/Root privileges."));
                 Console.WriteLine();
-                Log(LogLevel.Info, "Started MemCls with Administrator/Root privileges.");
+                Log(LogLevel.Info, "Started MemFree with Administrator/Root privileges.");
             }
 
             // Enable privileges
@@ -261,17 +261,40 @@ namespace MemCls
             string labelColor(string label) => Rgb(LightGray.r, LightGray.g, LightGray.b, label);
             string valueColor(string val) => Rgb(ColorStart.r, ColorStart.g, ColorStart.b, val);
 
-            Console.WriteLine($"  {labelColor("Memory Load (Usage):")}  {valueColor($"{status.MemoryLoad}%")}");
+            Console.WriteLine($"  {labelColor("Memory Load (Usage):")}  {valueColor("{status.MemoryLoad}%")}");
             Console.WriteLine($"  {labelColor("Total Physical RAM: ")}  {valueColor(FormatBytes(status.TotalPhys))}");
             Console.WriteLine($"  {labelColor("Available Physical: ")}  {valueColor(FormatBytes(status.AvailPhys))}");
-            
-            // Only print page file stats if they are reported
+
+            // Linux-specific detailed breakdown
+            if (status.Buffers > 0 || status.Cached > 0 || status.Slab > 0 || status.Dirty > 0)
+            {
+                Console.WriteLine();
+                Console.WriteLine($"  {labelColor("  ── Detailed Breakdown:")}");
+                if (status.Buffers > 0)
+                    Console.WriteLine($"  {labelColor("    Buffers:     ")}  {valueColor(FormatBytes(status.Buffers))}");
+                if (status.Cached > 0)
+                    Console.WriteLine($"  {labelColor("    Cached:      ")}  {valueColor(FormatBytes(status.Cached))}");
+                if (status.Slab > 0)
+                    Console.WriteLine($"  {labelColor("    Slab:        ")}  {valueColor(FormatBytes(status.Slab))}");
+                if (status.Dirty > 0)
+                    Console.WriteLine($"  {labelColor("    Dirty:       ")}  {valueColor(FormatBytes(status.Dirty))}");
+                if (status.FragmentationIndex >= 0)
+                {
+                    string fragLabel = status.FragmentationIndex > 70 ? "Low" :
+                                       status.FragmentationIndex > 40 ? "Moderate" : "High";
+                    Console.WriteLine($"  {labelColor("    Frag. Index: ")}  {valueColor($"{status.FragmentationIndex}/100 ({fragLabel})")}");
+                }
+            }
+
+            // Page file / swap stats
             if (status.TotalPageFile > 0)
             {
-                Console.WriteLine($"  {labelColor("Total Page File:    ")}  {valueColor(FormatBytes(status.TotalPageFile))}");
-                Console.WriteLine($"  {labelColor("Available Page File:")}  {valueColor(FormatBytes(status.AvailPageFile))}");
+                Console.WriteLine();
+                Console.WriteLine($"  {labelColor("Total Page File/Swap: ")}  {valueColor(FormatBytes(status.TotalPageFile))}");
+                Console.WriteLine($"  {labelColor("Available Page File/Swap:")}  {valueColor(FormatBytes(status.AvailPageFile))}");
             }
         }
+
 
         private static string FormatBytes(ulong bytes)
         {

@@ -1,7 +1,7 @@
 using System;
 using System.Runtime.InteropServices;
 
-namespace MemCls
+namespace MemFree
 {
     public static class MemoryCleanerFactory
     {

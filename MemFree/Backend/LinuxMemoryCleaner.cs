@@ -3,7 +3,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 
-namespace MemCls
+namespace MemFree
 {
     public class LinuxMemoryCleaner : IMemoryCleaner
     {
@@ -41,6 +41,10 @@ namespace MemCls
         {
             ulong totalPhys = 0;
             ulong availPhys = 0;
+            ulong buffers = 0;
+            ulong cached = 0;
+            ulong slab = 0;
+            ulong dirty = 0;
             ulong totalSwap = 0;
             ulong availSwap = 0;
 
@@ -59,17 +63,24 @@ namespace MemCls
                         if (ulong.TryParse(valStr, out ulong valKb))
                         {
                             ulong valBytes = valKb * 1024;
-                            if (key == "MemTotal") totalPhys = valBytes;
-                            else if (key == "MemAvailable") availPhys = valBytes;
-                            else if (key == "SwapTotal") totalSwap = valBytes;
-                            else if (key == "SwapFree") availSwap = valBytes;
+                            switch (key)
+                            {
+                                case "MemTotal": totalPhys = valBytes; break;
+                                case "MemAvailable": availPhys = valBytes; break;
+                                case "Buffers": buffers = valBytes; break;
+                                case "Cached": cached = valBytes; break;
+                                case "Slab": slab = valBytes; break;
+                                case "Dirty": dirty = valBytes; break;
+                                case "SwapTotal": totalSwap = valBytes; break;
+                                case "SwapFree": availSwap = valBytes; break;
+                            }
                         }
                     }
 
                     // Fallback if MemAvailable is not reported (older kernels)
-                    if (availPhys == 0)
+                    if (availPhys == 0 && totalPhys > 0)
                     {
-                        ulong free = 0, buffers = 0, cached = 0;
+                        ulong free = 0;
                         foreach (string line in lines)
                         {
                             string[] parts = line.Split(':', StringSplitOptions.TrimEntries);
@@ -78,10 +89,7 @@ namespace MemCls
                             string valStr = parts[1].Split(' ', StringSplitOptions.RemoveEmptyEntries)[0];
                             if (ulong.TryParse(valStr, out ulong valKb))
                             {
-                                ulong valBytes = valKb * 1024;
-                                if (key == "MemFree") free = valBytes;
-                                else if (key == "Buffers") buffers = valBytes;
-                                else if (key == "Cached") cached = valBytes;
+                                if (key == "MemFree") free = valKb * 1024;
                             }
                         }
                         availPhys = free + buffers + cached;
@@ -113,7 +121,12 @@ namespace MemCls
                 TotalPhys = totalPhys,
                 AvailPhys = availPhys,
                 TotalPageFile = totalSwap,
-                AvailPageFile = availSwap
+                AvailPageFile = availSwap,
+                Buffers = buffers,
+                Cached = cached,
+                Slab = slab,
+                Dirty = dirty,
+                FragmentationIndex = GetFragmentationIndex()
             };
         }
 
@@ -121,23 +134,9 @@ namespace MemCls
         {
             logger(LogLevel.Info, "Starting Linux-specific memory cleanup operations...", null);
 
-            // 1. Process cleanup simulation
-            try
-            {
-                Process[] processes = Process.GetProcesses();
-                logger(LogLevel.Info, $"Found {processes.Length} processes running.", null);
-                for (int i = 0; i < processes.Length; i++)
-                {
-                    if (i % 10 == 0 || i == processes.Length - 1)
-                    {
-                        onProcessProgress(i + 1, processes.Length);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                logger(LogLevel.Warning, "Failed to query process list.", ex);
-            }
+            // Note: Process working set cleanup is Windows-only (EmptyWorkingSet).
+            // Linux/macOS kernels do not provide an equivalent API.
+            // Proceed directly to system cache cleanup.
 
             // 2. Clear System Cache (requires root)
             if (IsAdmin)
@@ -159,7 +158,32 @@ namespace MemCls
                     File.WriteAllText("/proc/sys/vm/drop_caches", "3");
                     
                     logger(LogLevel.Info, "Pagecache, dentries, and inodes dropped.", null);
-                    onSummary("System pagecache, dentries, and inodes dropped successfully.");
+
+                    // 3. Trigger memory compaction
+                    try
+                    {
+                        logger(LogLevel.Info, "Triggering memory compaction via compact_memory...", null);
+                        File.WriteAllText("/proc/sys/vm/compact_memory", "1");
+                        logger(LogLevel.Info, "Memory compaction triggered successfully.", null);
+                    }
+                    catch (Exception ex)
+                    {
+                        logger(LogLevel.Warning, "Failed to trigger memory compaction (kernel may not support it).", ex);
+                    }
+
+                    // 4. Set compaction proactiveness
+                    try
+                    {
+                        logger(LogLevel.Info, "Setting compaction_proactiveness to 80...", null);
+                        File.WriteAllText("/proc/sys/vm/compaction_proactiveness", "80");
+                        logger(LogLevel.Info, "Compaction proactiveness set successfully.", null);
+                    }
+                    catch (Exception ex)
+                    {
+                        logger(LogLevel.Warning, "Failed to set compaction_proactiveness (kernel may not support it).", ex);
+                    }
+
+                    onSummary("System pagecache, dentries, inodes dropped and memory compacted successfully.");
                 }
                 catch (Exception ex)
                 {
@@ -171,6 +195,57 @@ namespace MemCls
             {
                 logger(LogLevel.Warning, "Standard user mode: skipping system cache purge.", null);
                 onSummary("Optimization complete. (Skipped system drop_caches - root privileges needed).");
+            }
+        }
+
+        /// <summary>
+        /// Reads /proc/buddy_info to calculate a memory fragmentation index (0-100).
+        /// 100 = not fragmented, 0 = heavily fragmented, -1 = unavailable.
+        /// </summary>
+        private int GetFragmentationIndex()
+        {
+            try
+            {
+                if (!File.Exists("/proc/buddy_info"))
+                    return -1;
+
+                string[] lines = File.ReadAllLines("/proc/buddy_info");
+                ulong totalHighOrderPages = 0;
+                ulong totalFreePages = 0;
+
+                foreach (string line in lines)
+                {
+                    string[] parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                    if (parts.Length < 4) continue;
+
+                    if (!int.TryParse(parts[1], out int order)) continue;
+
+                    // Columns after "Order N:" are per-node per-zone page counts
+                    for (int i = 2; i < parts.Length; i++)
+                    {
+                        if (ulong.TryParse(parts[i], out ulong count))
+                        {
+                            ulong pages = count * (1UL << order);
+                            totalFreePages += pages;
+                            // High-order pages (>= 32 contiguous pages = order >= 5) indicate less fragmentation
+                            if (order >= 5)
+                            {
+                                totalHighOrderPages += pages;
+                            }
+                        }
+                    }
+                }
+
+                if (totalFreePages == 0) return 0;
+
+                // Fragmentation index: percentage of free pages that ARE high-order
+                // Higher = less fragmented
+                int fragIndex = (int)((double)totalHighOrderPages / (double)totalFreePages * 100);
+                return Math.Max(0, Math.Min(100, fragIndex));
+            }
+            catch
+            {
+                return -1;
             }
         }
     }

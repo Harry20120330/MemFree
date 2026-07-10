@@ -2,7 +2,7 @@ using System;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 
-namespace MemCls
+namespace MemFree
 {
     public class MacMemoryCleaner : IMemoryCleaner
     {
@@ -123,23 +123,9 @@ namespace MemCls
         {
             logger(LogLevel.Info, "Starting macOS-specific memory cleanup operations...", null);
 
-            // 1. Process cleanup progress simulation
-            try
-            {
-                Process[] processes = Process.GetProcesses();
-                logger(LogLevel.Info, $"Found {processes.Length} processes running.", null);
-                for (int i = 0; i < processes.Length; i++)
-                {
-                    if (i % 10 == 0 || i == processes.Length - 1)
-                    {
-                        onProcessProgress(i + 1, processes.Length);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                logger(LogLevel.Warning, "Failed to query process list.", ex);
-            }
+            // Note: Process working set cleanup is Windows-only (EmptyWorkingSet).
+            // Linux/macOS kernels do not provide an equivalent API.
+            // Proceed directly to system cache cleanup.
 
             // 2. Execute purge command (requires root)
             if (IsAdmin)

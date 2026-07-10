@@ -7,27 +7,21 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
-  <!-- JIT 配置（自包含） -->
+  <!-- JIT 配置（自包含/单文件） -->
   <PropertyGroup Condition="'$(Configuration)' == 'JIT'">
     <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
     <PublishAot>false</PublishAot>
     <PublishReadyToRun>false</PublishReadyToRun>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
   </PropertyGroup>
 
-  <!-- ReadyToRun (R2R) 配置 -->
-  <PropertyGroup Condition="'$(Configuration)' == 'R2R'">
-    <SelfContained>true</SelfContained>
-    <PublishReadyToRun>true</PublishReadyToRun>
-    <PublishAot>false</PublishAot>
-    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
-  </PropertyGroup>
-
-  <!-- Native AOT 配置 -->
+  <!-- Native AOT 配置（单文件） -->
   <PropertyGroup Condition="'$(Configuration)' == 'AOT'">
     <SelfContained>true</SelfContained>
     <PublishAot>true</PublishAot>
     <PublishTrimmed>true</PublishTrimmed>
+    <PublishSingleFile>true</PublishSingleFile>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <!-- 防止裁剪关键运行时成员 -->
 

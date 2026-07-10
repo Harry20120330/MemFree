@@ -1,6 +1,6 @@
 using System;
 
-namespace MemCls
+namespace MemFree
 {
     public enum LogLevel
     {
@@ -16,6 +16,13 @@ namespace MemCls
         public ulong AvailPhys;       // in bytes
         public ulong TotalPageFile;   // in bytes
         public ulong AvailPageFile;   // in bytes
+
+        // Linux-specific detailed metrics
+        public ulong Buffers;         // in bytes (Linux /proc/meminfo Buffers)
+        public ulong Cached;          // in bytes (Linux /proc/meminfo Cached)
+        public ulong Slab;            // in bytes (Linux /proc/meminfo Slab)
+        public ulong Dirty;           // in bytes (Linux /proc/meminfo Dirty)
+        public int FragmentationIndex; // 0-100, -1 if unavailable (Linux only)
     }
 
     public interface IMemoryCleaner

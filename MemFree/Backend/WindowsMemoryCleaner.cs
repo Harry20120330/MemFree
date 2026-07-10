@@ -4,7 +4,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Security.Principal;
 
-namespace MemCls
+namespace MemFree
 {
     public class WindowsMemoryCleaner : IMemoryCleaner
     {
