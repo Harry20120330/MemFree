@@ -10,7 +10,6 @@ on:
 
 env:
   DOTNET_VERSION: '10.0.x'
-  SOLUTION_PATH: 'MemFree.slnx'
 
 jobs:
   build:
@@ -46,17 +45,11 @@ jobs:
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
-      - name: Restore dependencies
-        run: dotnet restore ${{ env.SOLUTION_PATH }}
-
-      - name: Build
+      - name: Restore dependencies (${{ matrix.rid }})
         run: >
-          dotnet build MemFree/MemFree.csproj
+          dotnet restore MemFree/MemFree.csproj
           --configuration JIT
           --runtime ${{ matrix.rid }}
-          --self-contained
-          --no-restore
-          -v:normal
 
       - name: Publish
         run: >
@@ -65,7 +58,7 @@ jobs:
           --runtime ${{ matrix.rid }}
           --self-contained
           --property:PublishSingleFile=true
-          --no-build
+          --no-restore
           -o ${{ env.OUTPUT_DIR }}
           -v:minimal
 
