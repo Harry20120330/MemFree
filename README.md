@@ -94,24 +94,18 @@ When running on macOS, MemFree leverages native system utilities:
 ---
 
 ## Build Configurations
-The project ships with three publish configurations defined in [MemFree.csproj](MemFree/MemFree.csproj):
+The project ships with two publish configurations defined in [MemFree.csproj](MemFree/MemFree.csproj):
 
 | Configuration | Description | Output | Runtime Dependency |
 |---|---|---|---|
 | **JIT** (self-contained) | Regular JIT compilation, but the publish bundles the .NET runtime. | `publish/JIT/MemFree.exe` | None – fully bundled |
 | **R2R** | Ready-to-Run (pre-compiled) + self-contained runtime – faster start-up. | `publish/R2R/MemFree.exe` | None – fully bundled |
-| **AOT** | Native AOT – completely native binary, single file, smallest size. | `publish/AOT/MemFree.exe` | None – fully bundled |
 
 ### Compilation Commands
 
 By default, the publish configurations in the csproj target `win-x64`. You can compile for other platforms by specifying the appropriate runtime identifier (RID):
 
 ```powershell
-# Windows x64 Native AOT
-dotnet publish -c AOT -r win-x64 -o publish/AOT
-```
-
-```bash
 # Linux x64 Self-Contained
 dotnet publish -c Release -r linux-x64 --self-contained -o publish/linux
 

@@ -216,12 +216,24 @@ namespace MemFree
                 foreach (string line in lines)
                 {
                     string[] parts = line.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                    if (parts.Length < 4) continue;
+                    if (parts.Length < 4 || !string.Equals(parts[0], "Node", StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
 
-                    if (!int.TryParse(parts[1], out int order)) continue;
+                    int orderIndex = Array.FindIndex(parts, part => string.Equals(part, "order", StringComparison.OrdinalIgnoreCase));
+                    if (orderIndex < 0 || orderIndex + 1 >= parts.Length)
+                    {
+                        continue;
+                    }
 
-                    // Columns after "Order N:" are per-node per-zone page counts
-                    for (int i = 2; i < parts.Length; i++)
+                    if (!int.TryParse(parts[orderIndex + 1].TrimEnd(':'), out int order))
+                    {
+                        continue;
+                    }
+
+                    // Values after the zone name are counts for each order bucket.
+                    for (int i = orderIndex + 2; i < parts.Length; i++)
                     {
                         if (ulong.TryParse(parts[i], out ulong count))
                         {

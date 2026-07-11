@@ -1,0 +1,104 @@
+name: Build & Release MemFree
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  release:
+    types: [published]
+
+env:
+  DOTNET_VERSION: '10.0.x'
+  SOLUTION_PATH: 'MemFree.slnx'
+
+jobs:
+  build:
+    name: Build - ${{ matrix.os }} / ${{ matrix.rid }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            rid: win-x64
+          - os: windows-latest
+            rid: win-arm64
+          - os: ubuntu-latest
+            rid: linux-x64
+          - os: ubuntu-latest
+            rid: linux-arm64
+          - os: macos-latest
+            rid: osx-x64
+          - os: macos-latest
+            rid: osx-arm64
+
+    env:
+      OUTPUT_DIR: MemFree/bin/JIT/net10.0/${{ matrix.rid }}/publish/
+      ARTIFACT_NAME: MemFree-JIT-${{ matrix.rid }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore dependencies
+        run: dotnet restore ${{ env.SOLUTION_PATH }}
+
+      - name: Build
+        run: >
+          dotnet build MemFree/MemFree.csproj
+          --configuration JIT
+          --runtime ${{ matrix.rid }}
+          --self-contained
+          --no-restore
+          -v:normal
+
+      - name: Publish
+        run: >
+          dotnet publish MemFree/MemFree.csproj
+          --configuration JIT
+          --runtime ${{ matrix.rid }}
+          --self-contained
+          --property:PublishSingleFile=true
+          --no-build
+          -o ${{ env.OUTPUT_DIR }}
+          -v:minimal
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARTIFACT_NAME }}
+          path: ${{ env.OUTPUT_DIR }}
+          retention-days: 30
+          if-no-files-found: error
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: windows-latest
+    if: github.event_name == 'release'
+
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Zip artifacts
+        run: |
+          Get-ChildItem artifacts -Directory | ForEach-Object {
+            $zipName = "MemFree-${{ github.event.release.tag_name }}-$($_.Name).zip"
+            Compress-Archive -Path "$($_.FullName)/*" -DestinationPath $zipName -Force
+          }
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v1
+        with:
+          files: MemFree-${{ github.event.release.tag_name }}-*.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

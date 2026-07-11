@@ -86,6 +86,19 @@ namespace MemFree
             return sb.ToString();
         }
 
+        private static bool CanUseInteractiveConsole()
+        {
+            return !Console.IsInputRedirected && !Console.IsOutputRedirected;
+        }
+
+        private static void SafeReadKey()
+        {
+            if (CanUseInteractiveConsole())
+            {
+                Console.ReadKey();
+            }
+        }
+
         public static void Log(LogLevel level, string message, Exception? ex = null)
         {
             // Output to Console only for errors.
@@ -135,7 +148,7 @@ namespace MemFree
                 Log(LogLevel.Error, "Failed to initialize memory cleaner for this platform.", ex);
                 Console.WriteLine(Rgb(Red.r, Red.g, Red.b, $"[!] Error: {ex.Message}"));
                 Console.WriteLine("\nPress any key to exit...");
-                Console.ReadKey();
+                SafeReadKey();
                 return;
             }
 
@@ -198,14 +211,26 @@ namespace MemFree
                 cleaner.CleanMemory(
                     onProcessProgress: (current, total) =>
                     {
+                        if (!CanUseInteractiveConsole())
+                        {
+                            return;
+                        }
+
                         if (currentLineCursor == -1)
                         {
                             Console.Write(Rgb(LightGray.r, LightGray.g, LightGray.b, "  [~] Optimizing process working sets: "));
                             currentLineCursor = Console.CursorLeft;
                         }
-                        
-                        Console.SetCursorPosition(currentLineCursor, Console.CursorTop);
-                        Console.Write(Rgb(ColorStart.r, ColorStart.g, ColorStart.b, $"{current}/{total} processed..."));
+
+                        try
+                        {
+                            Console.SetCursorPosition(currentLineCursor, Console.CursorTop);
+                            Console.Write(Rgb(ColorStart.r, ColorStart.g, ColorStart.b, $"{current}/{total} processed..."));
+                        }
+                        catch
+                        {
+                            currentLineCursor = -1;
+                        }
                     },
                     onSummary: summaryMsg =>
                     {
@@ -251,7 +276,7 @@ namespace MemFree
             }
 
             Console.WriteLine("\nPress any key to exit...");
-            Console.ReadKey();
+            SafeReadKey();
         }
 
         private static void PrintMemoryStatus(string title, MemoryStatus status)

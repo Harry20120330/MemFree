@@ -13,18 +13,6 @@
     <PublishSingleFile>true</PublishSingleFile>
     <PublishAot>false</PublishAot>
     <PublishReadyToRun>false</PublishReadyToRun>
-    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
-  </PropertyGroup>
-
-  <!-- Native AOT 配置（单文件） -->
-  <PropertyGroup Condition="'$(Configuration)' == 'AOT'">
-    <SelfContained>true</SelfContained>
-    <PublishAot>true</PublishAot>
-    <PublishTrimmed>true</PublishTrimmed>
-    <PublishSingleFile>true</PublishSingleFile>
-    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
-    <!-- 防止裁剪关键运行时成员 -->
-
   </PropertyGroup>
   <ItemGroup>
     <TrimmerRootAssembly Include="System.Text.Json" />
